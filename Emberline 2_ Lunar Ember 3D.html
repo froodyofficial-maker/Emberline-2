@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Emberline 2: Lunar Ember 3D</title>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;700&family=VT323&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#07080f;--panel:#12162a;--line:#2a3158;--ink:#e8ecff;--dim:#8f98c8;--ember:#ff8a3d;--ok:#5be3a0;--bad:#ff5d6c;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root:not([data-theme="light"]){--bg:#07080f}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:'Pixelify Sans','Trebuchet MS',sans-serif;overflow:hidden}
+#app{height:100%;display:flex;flex-direction:column}
+#top{display:flex;flex-wrap:wrap;gap:4px;padding:6px;background:var(--panel);border-bottom:2px solid var(--line);font-size:14px}
+.m{background:#0b0e1d;border:1px solid var(--line);padding:3px 7px;border-radius:4px;white-space:nowrap}
+.m.low{border-color:var(--bad);color:var(--bad)}
+#spd{margin-left:auto;display:flex;gap:3px}
+button{font:inherit;color:var(--ink);background:#1b2142;border:1px solid var(--line);border-radius:4px;padding:4px 8px;cursor:pointer}
+button.on{background:var(--ember);color:#1a0d00;border-color:var(--ember)}
+button:disabled{opacity:.4;cursor:not-allowed}
+#wrap{flex:1;min-height:0;position:relative}
+canvas{width:100%;height:100%;display:block;touch-action:none}
+#log{position:absolute;left:8px;top:8px;right:8px;pointer-events:none;font-family:VT323,monospace;font-size:20px;color:#ffd9b5;text-shadow:0 1px 3px #000}
+#card{background:var(--panel);border-top:2px solid var(--line);padding:6px 10px;min-height:58px;font-size:14px;line-height:1.35}
+#card b{color:var(--ember)}.g{color:var(--ok)}.p{color:var(--bad)}
+#pal{display:flex;gap:4px;overflow-x:auto;padding:6px;background:var(--panel)}
+#pal button{flex:0 0 auto;min-width:78px;text-align:center;font-size:12px;line-height:1.2}
+#pal button span{display:block;font-size:20px}
+#cb{display:none;position:absolute;inset:0;z-index:4;pointer-events:none}#cb .bar{position:absolute;left:0;right:0;height:0;background:#000;transition:height 1.2s ease}#app.bars #cb .bar{height:12%}#app.cin #top,#app.cin #goal,#app.cin #pal,#app.cin #card,#app.cin #log{visibility:hidden}#fd{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none}#goal{padding:4px 8px;background:#0e1226;border-bottom:1px solid var(--line);font-size:13px;color:var(--dim)}#goal b{color:var(--ember)}.ok{color:var(--ok)}#skip{opacity:.45}#cb .t{top:0}#cb .b{bottom:0}#cap{position:absolute;left:0;right:0;bottom:3%;text-align:center;font-family:VT323,monospace;font-size:27px;letter-spacing:1px;color:#ffe6c7;text-shadow:0 2px 4px #000;padding:0 10px}#skip{position:absolute;right:10px;top:12%;pointer-events:auto;font-size:12px}
+@keyframes pu{50%{box-shadow:0 0 12px 3px #ff8a3d}}button.hl{animation:pu 1s infinite;border-color:var(--ember)}
+#ov{position:absolute;inset:0;background:rgba(5,6,14,.93);display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;z-index:5}
+#ov div{max-width:460px}
+h1{font-size:34px;margin:0 0 6px;color:var(--ember)}
+p{margin:8px 0;color:var(--dim);line-height:1.45}
+#ov button{font-size:18px;padding:8px 22px;margin-top:10px}
+</style></head><body>
+<div id="app">
+<div id="top"></div><div id="goal"></div>
+<div id="wrap"><canvas id="cv"></canvas><div id="log"></div>
+<div id="cb"><div id="fd"></div><div class="bar t"></div><div class="bar b"></div><div id="cap"></div><button id="skip">Skip ▸</button></div>
+<div id="ov" style="display:none"><div>
+<h1>🔥 Emberline 2<br>Lunar Ember <small>3D</small></h1>
+<p>The Stone Age fires taught us to grow without burning the land. Now the land is the Moon.</p>
+<p>Director Ama is on the radio: <i>"Four crew, one habitat, one home, and a very quiet world. Your people live in them and walk to work. Mission: start life in space. Grow through three eras, fend off alien raids, then explore Mars, Europa and Titan with 30 crew while keeping Stewardship at 60 or more. Drag astronauts onto buildings to put them to work. Every module gives something and costs the Moon something."</i></p>
+<button id="go">Land on the Moon</button>
+</div></div></div>
+<div id="card"></div>
+<div id="pal"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const W=13,H=9,$=id=>document.getElementById(id);
+const B={
+solar:{n:'Solar Array',i:'☀️',c:12,u:0,get:'+6 power in daylight (+50% on sunlit ridges)',pay:'0 at night, so you need batteries'},
+batt:{n:'Battery',i:'🔋',c:15,u:0,get:'Stores 40 power for the long night',pay:'Regolith only'},
+home:{n:'Regolith Home',i:'🏡',c:12,u:0,get:'Cozy room for 2 crew, no power needed',pay:'Packed regolith walls: -1 Stewardship each'},
+hab:{n:'Habitat',i:'🏠',c:25,u:1,get:'Room for 4 crew; new crew arrive from Earth',pay:'Draws 1 power. Crowding stops arrivals'},
+ice:{n:'Ice Miner',i:'⛏️',c:20,u:2,get:'+3 water. Crater tiles only',pay:'Empties the crater for good, kicks up dust'},
+dig:{n:'Regolith Digger',i:'🚜',c:15,u:2,get:'+4 regolith for building',pay:'Heavy dust, scars the surface (-3 Stewardship)'},
+elec:{n:'Electrolyzer',i:'💧',c:25,u:3,get:'Turns 2 water into 3 oxygen',pay:'Draws 3 power and eats your water'},
+green:{n:'Greenhouse',i:'🌱',c:30,u:2,get:'+3 food',pay:'Uses 1 water and 2 power'},
+rec:{n:'Recycler',i:'♻️',c:35,u:1,get:'+1.5 oxygen and +1 water from waste',pay:'Costly up front. The kind choice'},
+shield:{n:'Dust Shield',i:'🧲',c:30,u:2,get:'Clears 2 dust per second',pay:'Draws 2 power. Also blocks meteors'},
+reac:{n:'Fission Reactor',i:'☢️',c:80,u:0,get:'+20 power day and night',pay:'Waste and dust: -8 Stewardship'},
+laser:{n:'Defense Laser',i:'🔫',c:45,u:2,get:'Shoots alien UFOs in range',pay:'Draws 2 power. Useless when unpowered'},
+fus:{n:'Fusion Reactor',i:'⚛️',c:140,u:0,get:'+40 power, no dust',pay:'Very costly, -2 Stewardship'},
+rock:{n:'Rocket',i:'🚀',c:150,u:0,get:'Seeding missions to Mars, Europa and Titan',pay:'Each 35s trip burns 90 regolith, 40 water, 25 food, 25 oxygen'},
+pad:{n:'Launch Pad',i:'🚀',c:120,u:1,get:'Rockets are built next to it',pay:'Draws 1 power'}
+};
+let S,cv=$('cv'),stars=[],sel=null,hov=null,timer=null,spd=1,fresh=true;
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function nb(c,r){const d=r&1?[[-1,0],[1,0],[0,-1],[1,-1],[0,1],[1,1]]:[[-1,0],[1,0],[-1,-1],[0,-1],[-1,1],[0,1]];return d.map(([a,b])=>[c+a,r+b]).filter(([a,b])=>a>=0&&b>=0&&a<W&&b<H)}
+function newGame(){
+ const R=rng(7+Date.now()%1000),g=[];
+ for(let r=0;r<H;r++){g[r]=[];for(let c=0;c<W;c++){const x=R();g[r][c]={t:x<.1?'cr':x<.2?'rk':x<.32?'rg':'re',b:null,ice:240}}}
+ [[4,2],[9,6],[10,2],[2,6]].forEach(([c,r])=>g[r][c]={t:'cr',b:null,ice:240});
+ [[6,4],[7,4],[5,4],[6,3],[6,5],[7,3]].forEach(([c,r])=>g[r][c]={t:'re',b:null,ice:0});
+ g[7][3]={t:'ap',b:null,ice:0};
+ g[5][6].b='home';g[4][6].b='hab';g[4][7].b='solar';g[3][7].b='batt';
+ for(const[k,e]of Object.entries({reac:2,laser:2,fus:3,pad:3,rock:3}))B[k].e=e;for(const k in B)B[k].e=B[k].e||1;
+ S={g,t:0,reg:60,pw:20,o2:45,wa:30,fo:30,crew:4,dust:0,st:100,low:0,over:false,aid:0,hint:'',rd:0,tut:0,era:1,al:[],exp:null,ex:[],sa:0};
+ stars=Array.from({length:90},()=>[Math.random(),Math.random(),Math.random()*1.6+.4]);
+ buildScene();msg('Director Ama: Base is live. Keep the lights on through the night.');
+}
+function msg(s){$('log').textContent=s;clearTimeout(msg.h);msg.h=setTimeout(()=>{if($('log').textContent==s)$('log').textContent=''},6000)}
+function all(f){for(let r=0;r<H;r++)for(let c=0;c<W;c++)f(S.g[r][c],c,r)}
+function cnt(k){let n=0;all(t=>{if(t.b===k)n++});return n}
+function day(){return S.t%100<60}
+function hous(){return 4*cnt('hab')+2*cnt('home')}
+function stew(){
+ let a=0;all((t,c,r)=>{if(t.t==='ap')nb(c,r).forEach(([x,y])=>{if(S.g[y][x].b)a++})});
+ return Math.max(0,Math.round(100-Math.min(60,S.dust/2)-3*(cnt('dig')+cnt('ice'))-8*cnt('reac')-2*cnt('fus')-cnt('home')-10*a));
+}
+function tick(){
+ if(S.over||cut)return;
+ S.t++;let prod=0,use=0;
+ all(t=>{if(!t.b)return;use+=B[t.b].u;if(t.b==='solar')prod+=day()?(t.t==='rg'?9:6):0;if(t.b==='reac')prod+=20;if(t.b==='fus')prod+=40});
+ const cap=20+40*cnt('batt'),net=prod-use;let ra=1;
+ if(net>=0)S.pw=Math.min(cap,S.pw+net);else if(S.pw>=-net)S.pw+=net;else{ra=use?(prod+S.pw)/use:1;S.pw=0}
+ let dust=0;const W=staff();
+ all((t,c,r)=>{if(!t.b)return;const f=.5+.5*Math.min(2,W[c+','+r]||0);
+  if(t.b==='ice'){if(t.ice>0){const w=Math.min(3*ra*f,t.ice);t.ice-=w;S.wa+=w;dust+=.4*ra;if(t.ice<=0)msg('An ice crater ran dry. That water is gone for good.')}}
+  if(t.b==='dig'){S.reg+=4*ra*f;dust+=.8*ra*f}
+  if(t.b==='elec'&&S.wa>=2){S.wa-=2*ra*f;S.o2+=3*ra*f}
+  if(t.b==='green'&&S.wa>=1){S.wa-=ra;S.fo+=3*ra*f}
+  if(t.b==='rec'){S.o2+=1.5*ra*f;S.wa+=ra*f}
+  if(t.b==='shield')dust-=2*ra*f;
+  if(t.b==='reac')dust+=.3});
+ S.dust=Math.max(0,S.dust+dust-.15);
+ S.o2-=S.crew*.2;S.wa-=S.crew*.07;S.fo-=S.crew*.1;
+ const dead=S.o2<=0||S.wa<=0||S.fo<=0;
+ S.o2=Math.max(0,S.o2);S.wa=Math.max(0,S.wa);S.fo=Math.max(0,S.fo);
+ if(dead&&S.t%4===0){S.crew--;msg('We lost a crew member. Check oxygen, water and food.')}
+ const hq=hous();
+ if(!dead&&S.crew<hq&&S.o2>20&&S.fo>10&&S.wa>10&&S.t%12===0){S.crew++;msg('A crew rotation arrives from Earth. Welcome!')}
+ if(S.era<3&&OBJ[S.era].every(o=>o.c())){S.era++;msg('ERA '+S.era+': '+EN[S.era-1]+'!');cutscene([{pos:[TX-8,5,TZ+10],look:[TX,1,TZ],dur:1800,text:'ERA '+S.era+': '+EN[S.era-1]},{pos:[TX+8,6,TZ+9],look:[TX,1,TZ],dur:1800,text:EU[S.era-1]}],true)}
+ if(S.era>=2&&S.t%55===54)raid();
+ alienU(ra);expU();
+ S.st=stew();S.low=S.st<20?S.low+1:0;
+ if(S.t===60)cutscene([{pos:[4,2.4,12],look:[10.4,.6,6],dur:2200,text:'The first lunar night falls. Fourteen days of dark.'},{pos:[16,3,10],look:[10.4,.6,6],dur:2200,text:'Crew head home. Batteries and reactors carry the base.'}],true);
+ if(S.t%100===60)msg('Lunar night begins. Solar arrays go dark. Batteries and reactors carry you.');
+ if(S.t%100===0)msg('Sunrise over the ridge.');
+ if(S.t%40===39)event();
+ if(S.crew<=0)end(false,'Everyone is gone. The Moon is quiet again.');
+ else if(S.low>20)end(false,'Earth pulled funding: the site was left too scarred and dusty.');
+ else if(S.era===3&&OBJ[3].every(o=>o.c()))end(true,'');
+ S.hint=hint();draw();hud();
+}
+function event(){
+ const x=Math.random();
+ if(x<.34){if(!S.sf){S.sf=1;cutscene([{pos:[TX+4,5,TZ+16],look:[TX,3,TZ-10],dur:1600,text:'Solar flare! The sky burns white.'},{pos:[TX+4,5,TZ+16],look:[TX,3,TZ-10],dur:1600,text:'Stored power is wiped. Batteries are your lifeline.'}],true)}S.pw=Math.floor(S.pw*.3);msg('Solar flare! Stored power drained.')}
+ else if(x<.67){if(cnt('shield')){msg('Micrometeorites hit. The Dust Shield held.')}else{const l=[];all((t,c,r)=>{if(t.b&&t.b!=='hab')l.push(t)});if(l.length){const t=l[Math.random()*l.length|0];msg('Micrometeorite destroyed your '+B[t.b].n+'.');t.b=null}}}
+ else{S.reg+=40;S.o2+=10;msg('Supply drop from Earth: +40 regolith, +10 oxygen.')}
+}
+function hint(){
+ if(S.o2<25)return 'Oxygen low: build an Electrolyzer (needs water) or a Recycler.';
+ if(S.wa<20)return 'Water low: Ice Miners work on craters. Recyclers give water back.';
+ if(S.fo<20)return 'Food low: build a Greenhouse.';
+ if(S.pw<10&&!day())return 'Power low in the night: add Batteries or a Reactor.';
+ if(!cnt('dig')&&S.reg<40)return 'Low on regolith: build a Regolith Digger.';
+ if(S.crew>=hous())return 'Housing full: build another Habitat to welcome crew.';
+ if(S.st<60)return 'Stewardship under 60: add Dust Shields and Recyclers.';
+ 
+ if(S.era===1)return 'Finish the 🎯 goals to reach Era 2. Drag astronauts onto buildings to staff them.';if(S.era===2)return 'Raids every 55s! Man your Defense Lasers with astronauts.';return 'Era 3: Launch Pad, then a Rocket beside it. Seed life on all three worlds.';
+}
+const EN=['Moonfall','Lunar Industry','Deep Space'],EU=['','Fission power and Defense Lasers unlocked. Watch the sky.','Fusion, Launch Pads and Rockets unlocked. The solar system awaits.'];
+const PL={Mars:['reg',300,'+300 regolith'],Europa:['wa',200,'+200 water'],Titan:['fo',160,'+160 food']};
+const TUT=[
+{k:'dig',c:()=>cnt('dig')>0,t:'Earn 🪨 regolith: build a Regolith Digger. Everything you build costs regolith. Machines need ⚡ power, made by Solar Arrays by day and stored in Batteries.'},
+{c:()=>ppl.some(p=>p.userData.job),t:'Pick up an astronaut (click or tap and drag) and drop them on a working building. Staffed buildings make more: empty = ×0.5, 1 worker = ×1, 2 = ×1.5. Lasers only fire when manned!'},
+{k:'ice',c:()=>cnt('ice')>0,t:'Earn 💧 water: build an Ice Miner on a dark crater tile. Craters run dry for good, so use them wisely.'},
+{k:'elec',c:()=>cnt('elec')>0,t:'Earn 🫁 oxygen: an Electrolyzer turns water into oxygen. Your crew breathes it constantly.'},
+{k:'green',c:()=>cnt('green')>0,t:'Earn 🍞 food: build a Greenhouse. It uses a little water.'},
+{k:'batt',c:()=>cnt('batt')>1,t:'The lunar night is 40 seconds of darkness. Build a second Battery so ⚡ lasts until sunrise.'},
+{k:'rec',c:()=>cnt('rec')>0,t:'The kind choice: a Recycler returns oxygen and water and makes no dust. Watch 🌿 Stewardship.'},
+{k:'hab',c:()=>hous()>=10,t:'New crew need beds. Build a Habitat. Reach the 🎯 goals in the bar above to enter Era 2.'},
+{k:'laser',c:()=>S.era>=2,t:'Finish every 🎯 goal. Era 2 unlocks Fission power and Defense Lasers, because aliens are coming.'}];
+function tutTxt(){return '<b>Tutorial '+(S.tut+1)+'/'+TUT.length+':</b> '+TUT[S.tut].t+' <button onclick="S.tut=99;hud()">Skip</button>'}
+function mkU(){const g=new THREE.Group();g.add(P(cy(.6,.1,20),0x8890a8,0,0,0,{metalness:.7}),P(new THREE.SphereGeometry(.3,12,8),0x66ff99,0,.1,0,{emissive:0x22aa55,transparent:true,opacity:.8}),P(new THREE.SphereGeometry(.08,6,6),0xff3355,.5,0,0,{emissive:0xff0033}),P(new THREE.SphereGeometry(.08,6,6),0xff3355,-.5,0,0,{emissive:0xff0033}));return g}
+function beam(a,b){const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints([a,b]),new THREE.LineBasicMaterial({color:0xff4060}));grp.add(l);setTimeout(()=>grp.remove(l),350)}
+function raid(){
+ const tg=[];all((t,c,r)=>{if(t.b)tg.push([c,r])});if(!tg.length)return;
+ for(let i=0;i<S.era+1;i++){S.rd+=i?0:1;const[c,r]=tg[Math.random()*tg.length|0],[x,z]=pos(c,r),a={x:TX+(Math.random()-.5)*24,z:TZ-26,tx:x,tz:z,c,r,hp:4,m:mkU()};a.m.position.set(a.x,9,a.z);grp.add(a.m);S.al.push(a)}
+ msg('ALIEN RAID! '+S.era+' UFOs inbound. Drag astronauts onto your Defense Lasers to man them!');
+ if(!S.sa){S.sa=1;cutscene([{pos:[TX,6,TZ+14],look:[TX+6,10,TZ-14],dur:1800,text:'Director Ama: Unidentified craft entering lunar airspace!'},{pos:[TX,6,TZ+14],look:[TX+6,10,TZ-14],dur:1800,text:'They are targeting our modules. Defense Lasers, now!'}],true)}}
+function alienU(ra){
+ const ls=[],W=staff();all((t,c,r)=>{if(t.b==='laser'&&W[c+','+r]){const[x,z]=pos(c,r);ls.push([x,z])}});
+ S.al.slice().forEach(a=>{
+  const dx=a.tx-a.x,dz=a.tz-a.z,d=Math.hypot(dx,dz);
+  if(d<1.6){const t=S.g[a.r][a.c];if(t.b){msg('A UFO destroyed your '+B[t.b].n+'!');if(t.b==='hab')S.crew=Math.max(0,S.crew-2);if(t.b==='home')S.crew=Math.max(0,S.crew-1);t.b=null}grp.remove(a.m);S.al.splice(S.al.indexOf(a),1);return}
+  a.x+=dx/d*1.4;a.z+=dz/d*1.4});
+ if(ra>.3)ls.forEach(([lx,lz])=>{let b=null,bd=49;S.al.forEach(a=>{const d=(a.x-lx)**2+(a.z-lz)**2;if(d<bd){bd=d;b=a}});
+  if(b){b.hp--;beam(new THREE.Vector3(lx,1.1,lz),new THREE.Vector3(b.x,1.6,b.z));if(b.hp<=0){grp.remove(b.m);S.al.splice(S.al.indexOf(b),1);msg('UFO shot down!')}}})}
+function expU(){if(S.exp&&--S.exp.left<=0){const p=PL[S.exp.d];S[p[0]]+=p[1];S.ex.push(S.exp.d);msg(S.exp.d+' seeded with life! Cargo returned: '+p[2]+'. Worlds seeded: '+S.ex.length+'/3.');S.exp=null;all(t=>{if(t.b==='rock')t.bk=null})}}
+function go(d){
+ if(S.exp||S.ex.includes(d)||S.reg<90||S.wa<40||S.fo<25||S.o2<25)return msg('Not ready: need 🪨90 💧40 🍞25 🫁25 and no mission underway.');
+ S.reg-=90;S.wa-=40;S.fo-=25;S.o2-=25;S.exp={d,left:35};launchScene(()=>{},d);hud()}
+function mBtns(){return '<br>'+Object.keys(PL).map(k=>'<button '+(S.ex.includes(k)||S.exp?'disabled':'')+' onclick="go(\''+k+'\')">🚀 '+k+': '+PL[k][2]+(S.ex.includes(k)?' ✔':'')+'</button>').join(' ')+(S.exp?' <span class="g">En route to '+S.exp.d+': '+S.exp.left+'s</span>':'')}
+const OBJ={1:[{t:'Crew 14',c:()=>S.crew>=14,v:()=>S.crew+'/14'},{t:'🌿 Stewardship 60+',c:()=>S.st>=60,v:()=>S.st+'/60'},{t:'3 Batteries',c:()=>cnt('batt')>=3,v:()=>cnt('batt')+'/3'}],
+2:[{t:'Crew 24',c:()=>S.crew>=24,v:()=>S.crew+'/24'},{t:'🌿 Stewardship 60+',c:()=>S.st>=60,v:()=>S.st+'/60'},{t:'Survive 3 alien raids',c:()=>S.rd>=3&&!S.al.length,v:()=>Math.min(S.rd,3)+'/3'},{t:'3 Defense Lasers',c:()=>cnt('laser')>=3,v:()=>cnt('laser')+'/3'}],
+3:[{t:'Crew 30',c:()=>S.crew>=30,v:()=>S.crew+'/30'},{t:'🌿 Stewardship 60+',c:()=>S.st>=60,v:()=>S.st+'/60'},{t:'Seed life on Mars, Europa and Titan',c:()=>S.ex.length>=3,v:()=>S.ex.length+'/3'}]};
+function goalHud(){$('goal').innerHTML='<b>🎯 ERA '+S.era+'/3 '+EN[S.era-1]+':</b> '+OBJ[S.era].map(o=>(o.c()?'<span class="ok">✅ ':'⬜ ')+o.t+' ('+o.v()+')'+(o.c()?'</span>':'')).join(' · ')+' <span style="opacity:.6">| MISSION: start life in space. Seed all 3 worlds with 30 crew</span>'}
+function staff(){const W={};ppl.forEach(p=>{const j=p.userData.job;if(j&&S.g[j[1]][j[0]].b){const k=j[0]+','+j[1];W[k]=(W[k]||0)+1}});return W}
+function ndc(e){const b=cv.getBoundingClientRect();mv.set((e.clientX-b.left)/b.width*2-1,-((e.clientY-b.top)/b.height)*2+1);ray.setFromCamera(mv,cam)}
+function tryPick(e){ndc(e);const h=ray.intersectObjects(ppl,true)[0];if(!h)return;let o=h.object;while(o.parent&&o.parent!==grp)o=o.parent;if(ppl.indexOf(o)<0)return;drag=o;ctl.enabled=false;dn=null;moveDrag(e);card()}
+function moveDrag(e){ndc(e);const h=ray.intersectObjects(tm,false)[0];if(h){drag.position.set(h.point.x,h.point.y+.9,h.point.z);hov=[h.object.userData.c,h.object.userData.r];draw()}}
+function drop(e){const p=drag;drag=null;if(!cut)ctl.enabled=true;dn=null;ndc(e);const h=ray.intersectObjects(tm,false)[0],u=p.userData;
+ if(!h){p.position.y=ground(p.position.x,p.position.z);hud();return}
+ const c=h.object.userData.c,r=h.object.userData.r,t=S.g[r][c],[x,z]=pos(c,r);u.job=null;
+ if(t.b&&WK[t.b]){const w=staff()[c+','+r]||0;if(w>=2)msg('That '+B[t.b].n+' already has 2 workers.');else{u.job=[c,r];msg('Astronaut now works at the '+B[t.b].n+'.')}}
+ else if(t.b==='hab'||t.b==='home')msg('Astronaut sent home to rest.');
+ const a=Math.random()*6.283,px=x+Math.cos(a)*.85,pz=z+Math.sin(a)*.85;u.tx=px;u.tz=pz;p.position.set(px,ground(x,z)+.3,pz);u.w=2;hud();draw()}
+function end(win,why){
+ S.over=true;clearInterval(timer);
+ const ov=$('ov');const show=()=>{ov.style.display='flex'};
+ ov.firstElementChild.innerHTML=win?
+ `<h1>🌱 Life begins among the stars!</h1><p>You led ${S.crew} crew through three eras, held off the aliens and seeded life on Mars, Europa and Titan from the Moon with Stewardship ${S.st}. The Moon is still a place worth visiting.</p><p>Time: ${S.t} sols-seconds. Dust: ${Math.round(S.dust)}. Ice craters left: ${(()=>{let n=0;all(t=>{if(t.t==='cr'&&t.ice>0)n++});return n})()}.</p><p><i>Emberline 3 will take you to the stars...</i></p><button onclick="start()">Play again</button>`:
+ `<h1>Mission lost</h1><p>${why}</p><button onclick="start()">Try again</button>`;
+ show();
+}
+function hud(){
+ goalHud();
+ while(S.tut<TUT.length&&TUT[S.tut].c())S.tut++;
+ const m=(l,v,low)=>`<div class="m${low?' low':''}">${l} ${v}</div>`;
+ $('top').innerHTML=m(day()?'☀️':'🌑',(day()?60-S.t%100:100-S.t%100)+'s')+m('⚡',Math.round(S.pw),S.pw<8)+m('🫁',Math.round(S.o2),S.o2<25)+m('💧',Math.round(S.wa),S.wa<15)+m('🍞',Math.round(S.fo),S.fo<15)+m('🪨',Math.round(S.reg))+m('👩‍🚀',S.crew+'/'+hous()+' (goal 24)')+m('🪐 Era '+S.era+': '+EN[S.era-1])+m('🌿 Stewardship',S.st,S.st<60)+
+ `<div id="spd">${[0,1,2,4].map(s=>`<button class="${spd===s?'on':''}" onclick="setSpd(${s})">${s?s+'×':'⏸'}</button>`).join('')}</div>`;
+ $('pal').innerHTML=Object.keys(B).map(k=>`<button class="${sel===k?'on':''} ${TUT[S.tut]&&TUT[S.tut].k===k?'hl':''}" ${S.reg<B[k].c||B[k].e>S.era?'disabled':''} onclick="pick('${k}')"><span>${B[k].i}</span>${B[k].n}<br>${B[k].e>S.era?'🔒 Era '+B[k].e:'🪨'+B[k].c}</button>`).join('');
+ card();
+}
+function card(){
+ if(drag){$('card').innerHTML='<b>👷 Carrying an astronaut.</b> Drop on a working building (max 2 each) to staff it, or on a Home to rest.';return}
+ let h='';
+ if(sel){const b=B[sel];h=`<b>${b.i} ${b.n}</b> (🪨${b.c}) <span class="g">You get: ${b.get}</span> · <span class="p">The Moon pays: ${b.pay}</span>`;
+  if(hov&&!S.g[hov[1]][hov[0]].b){const w=why(sel,hov[0],hov[1]);if(w)h+=`<br><span class="p">⚠ ${w}</span>`}}
+ else if(hov&&S.g[hov[1]][hov[0]].b){const t=S.g[hov[1]][hov[0]],b=B[t.b];h=`<b>${b.i} ${b.n}</b> <span class="g">${b.get}</span> · <span class="p">${b.pay}</span> <button onclick="demo()">Demolish (refund 50%)</button>${t.b==='rock'?mBtns():''}${WK[t.b]?'<br>👷 Workers: '+(staff()[hov[0]+','+hov[1]]||0)+'/2 (0 = ×0.5 output, 1 = ×1, 2 = ×1.5'+(t.b==='laser'?'; lasers only fire when manned':'')+')':''}`}
+ else h=(S.tut<TUT.length?tutTxt():'')||`<b>Director Ama:</b> ${S.hint||'Pick a module, then click a tile. Drag to orbit, scroll to zoom.'}`;
+ $('card').innerHTML=h;
+}
+function why(k,c,r){
+ const t=S.g[r][c];
+ if(B[k].e>S.era)return 'Unlocks in Era '+B[k].e+'.';
+ if(k==='rock'&&cnt('rock'))return 'You already have a rocket.';
+ if(k==='rock'&&!nb(c,r).some(([x,y])=>S.g[y][x].b==='pad'))return 'Build the Rocket next to a Launch Pad.';
+ if(t.t==='rk')return 'Solid rock, cannot build here.';
+ if(t.t==='ap')return 'Heritage site: the Apollo landing area. Leave it be.';
+ if(t.t==='cr'&&k!=='ice')return 'Craters are only for Ice Miners.';
+ if(t.t!=='cr'&&k==='ice')return 'Ice Miners need a crater.';
+ if(t.t==='cr'&&t.ice<=0)return 'This crater is already dry.';
+ if(S.reg<B[k].c)return 'Not enough regolith.';
+ if(nb(c,r).some(([x,y])=>S.g[y][x].t==='ap'))return 'Next to Apollo site: -10 Stewardship if you build.';
+ return '';
+}
+function pick(k){sel=sel===k?null:k;hud()}
+function setSpd(s){spd=s;clearInterval(timer);if(s&&!S.over)timer=setInterval(tick,1000/s);hud()}
+function demo(){const t=S.g[hov[1]][hov[0]];if(t.b){S.reg+=Math.floor(B[t.b].c/2);t.b=null;hud();draw()}}
+const R3=new THREE.WebGLRenderer({canvas:cv,antialias:true}),sc=new THREE.Scene(),cam=new THREE.PerspectiveCamera(45,1,.1,600),grp=new THREE.Group(),ray=new THREE.Raycaster(),mv=new THREE.Vector2();let tm=[];
+R3.shadowMap.enabled=true;sc.background=new THREE.Color(0x030409);sc.add(grp);
+const amb=new THREE.AmbientLight(0x8890c0,.45),sun=new THREE.DirectionalLight(0xfff2dd,1.6);
+sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-16,right:16,top:16,bottom:-16,near:1,far:80});
+sc.add(amb,sun,sun.target);
+const TX=1.732*(W/2-.25),TZ=1.5*(H-1)/2;
+sun.target.position.set(TX,0,TZ);cam.position.set(TX,13,TZ+12);
+const ctl=new THREE.OrbitControls(cam,cv);ctl.target.set(TX,0,TZ);ctl.maxPolarAngle=1.3;ctl.minDistance=6;ctl.maxDistance=32;ctl.enableDamping=true;
+(function(){const p=[];for(let i=0;i<700;i++){const a=Math.random()*6.283,b=Math.acos(2*Math.random()-1);p.push(250*Math.sin(b)*Math.cos(a),Math.abs(250*Math.cos(b))*.8+10,250*Math.sin(b)*Math.sin(a))}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));sc.add(new THREE.Points(g,new THREE.PointsMaterial({color:0xffffff,size:1.3,sizeAttenuation:false})));
+ const e=new THREE.Mesh(new THREE.SphereGeometry(9,24,16),new THREE.MeshBasicMaterial({color:0x2f6fe0}));e.position.set(TX+70,55,TZ-150);sc.add(e);
+ const l=new THREE.Mesh(new THREE.SphereGeometry(9.1,8,6),new THREE.MeshBasicMaterial({color:0x3fbf6a,wireframe:true}));l.position.copy(e.position);sc.add(l);
+ const f=new THREE.Mesh(new THREE.CircleGeometry(90,48),new THREE.MeshStandardMaterial({color:0x2a2b33,roughness:1}));f.rotation.x=-1.5708;f.position.set(TX,-.02,TZ);f.receiveShadow=true;sc.add(f)})();
+const HT={re:.3,rg:.6,cr:.12,rk:.3,ap:.3},CC={re:0x6d6f7c,rg:0xa5a7b6,cr:0x2c2f45,rk:0x4a4b55,ap:0x8a7a4a};
+function pos(c,r){return[1.732*(c+.5*(r&1)),1.5*r]}
+function P(g,col,x,y,z,o){const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial(Object.assign({color:col,roughness:.6},o||{})));m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;return m}
+const cy=(r,h,s)=>new THREE.CylinderGeometry(r,r,h,s||14),bx=(a,b,c)=>new THREE.BoxGeometry(a,b,c);
+function mk(k){
+ const g=new THREE.Group(),a=x=>{g.add(x);return x};
+ if(k==='solar'){a(P(cy(.05,.5),0x999999,0,.25,0));const p=a(P(bx(1.3,.05,.8),0x2b5fd9,0,.6,0,{metalness:.6,roughness:.3}));p.rotation.x=-.5}
+ if(k==='batt'){a(P(cy(.35,.6),0x4ade80,0,.3,0));a(P(cy(.15,.1),0xdddddd,0,.65,0))}
+ if(k==='hab'){a(P(cy(.7,.15),0xcfd2dc,0,.07,0));a(P(new THREE.SphereGeometry(.65,18,10,0,6.3,0,1.57),0xf0f0f5,0,.15,0));a(P(bx(.3,.25,.1),0x223355,0,.35,.6))}
+ if(k==='ice'){a(P(bx(.7,.15,.7),0x666666,0,.07,0));a(P(new THREE.ConeGeometry(.35,1.3,4),0xff8a3d,0,.8,0));a(P(cy(.07,.5),0xdddddd,0,.25,.0))}
+ if(k==='dig'){a(P(bx(.8,.35,.5),0xffb020,0,.3,0));const w=a(P(cy(.3,.2,12),0x333333,.45,.3,0));w.rotation.x=1.5708;g.userData.sp=w;w.userData.ax='y'}
+ if(k==='elec'){a(P(cy(.25,.9),0x67e8f9,-.28,.45,0));a(P(cy(.25,.7),0xffffff,.28,.35,0))}
+ if(k==='green'){a(P(new THREE.SphereGeometry(.7,18,10,0,6.3,0,1.57),0x4ade80,0,.1,0,{transparent:true,opacity:.65}));a(P(new THREE.ConeGeometry(.15,.3,6),0x16a34a,0,.25,0))}
+ if(k==='rec'){a(P(cy(.18,.7),0x888899,0,.35,0));const t=a(P(new THREE.TorusGeometry(.45,.1,8,20),0x5be3a0,0,.55,0,{emissive:0x114433}));t.rotation.x=1.5708;g.userData.sp=t;t.userData.ax='z'}
+ if(k==='shield'){a(P(cy(.06,1.4),0x999999,0,.7,0));const t=a(P(new THREE.TorusGeometry(.35,.05,8,20),0xa78bfa,0,1.25,0,{emissive:0x5533aa}));t.rotation.x=1.5708;g.userData.sp=t;t.userData.ax='z'}
+ if(k==='reac'){a(P(new THREE.CylinderGeometry(.25,.42,1.1,14),0x9aa0ad,0,.55,0));a(P(new THREE.SphereGeometry(.14,10,8),0xff3a3a,0,1.15,0,{emissive:0xff2200}))}
+ if(k==='pad'){a(P(cy(.9,.1,24),0x333844,0,.05,0));a(P(cy(.17,.9),0xffffff,0,.6,0));a(P(new THREE.ConeGeometry(.17,.35,12),0xff4040,0,1.25,0));[0,2.1,4.2].forEach(r=>{const f=a(P(bx(.05,.3,.3),0xff4040,Math.sin(r)*.2,.25,Math.cos(r)*.2));f.rotation.y=r})}
+ if(k==='laser'){a(P(cy(.3,.2),0x555566,0,.1,0));a(P(bx(.3,.3,.3),0x8890a8,0,.35,0));const b=a(P(cy(.05,.7),0xff4060,0,.6,.2,{emissive:0x661122}));b.rotation.x=.9}
+ if(k==='fus'){a(P(cy(.3,.5),0x9aa0ad,0,.25,0));const t=a(P(new THREE.TorusGeometry(.42,.07,8,24),0x60a5fa,0,.7,0,{emissive:0x2255cc}));t.rotation.x=1.5708;g.userData.sp=t;t.userData.ax='z'}
+ if(k==='rock'){a(P(cy(.3,.1,10),0x333844,0,.05,0));a(P(cy(.2,1.1),0xffffff,0,.65,0));a(P(new THREE.ConeGeometry(.2,.4,12),0xff4040,0,1.4,0));[0,2.1,4.2].forEach(r=>{const f=a(P(bx(.05,.35,.3),0xff4040,Math.sin(r)*.25,.3,Math.cos(r)*.25));f.rotation.y=r})}
+ if(k==='home'){a(P(new THREE.SphereGeometry(.5,14,8,0,6.3,0,1.57),0xd9c9a8,0,0,0));a(P(bx(.18,.28,.08),0x553322,0,.14,.46))}
+ return g}
+function buildScene(){
+ while(grp.children.length)grp.remove(grp.children[0]);tm=[];ppl=[];
+ all((t,c,r)=>{const h=HT[t.t],[x,z]=pos(c,r),col=new THREE.Color(CC[t.t]).offsetHSL(0,0,(Math.random()-.5)*.04);
+  const m=P(cy(.97,h,6),col,x,h/2,z);m.userData={c,r};t.m=m;t.bk=null;t.bm=null;tm.push(m);grp.add(m);
+  if(t.t==='cr'){t.ic=P(cy(.6,.03,20),0x78c8ff,x,h+.02,z,{transparent:true,opacity:.7,emissive:0x1a3a55});grp.add(t.ic)}else t.ic=null;
+  if(t.t==='rk'){const d=P(new THREE.DodecahedronGeometry(.45),0x5a5b66,x,h+.3,z);grp.add(d)}
+  if(t.t==='ap'){grp.add(P(cy(.02,.8,6),0xdddddd,x+.25,h+.4,z));grp.add(P(bx(.4,.25,.02),0xffffff,x+.45,h+.65,z));grp.add(P(bx(.45,.3,.45),0xd4af37,x-.2,h+.2,z-.1,{metalness:.7}))}});
+}
+function draw(){
+ all((t,c,r)=>{
+  if(t.bk!==t.b){if(t.bm){grp.remove(t.bm);t.bm=null}if(t.b){const m=mk(t.b),[x,z]=pos(c,r);m.position.set(x,HT[t.t],z);grp.add(m);t.bm=m}t.bk=t.b}
+  if(t.ic){t.ic.visible=t.ice>0;const k=.35+.65*t.ice/240;t.ic.scale.set(k,1,k)}
+  let em=0;if(drag&&hov&&hov[0]===c&&hov[1]===r)em=t.b&&WK[t.b]?0x226633:0x2a3355;if(sel&&hov&&hov[0]===c&&hov[1]===r&&!t.b){const w=why(sel,c,r);em=w&&w.indexOf('Next')!==0?0x771122:0x226633}
+  t.m.material.emissive.setHex(em)});
+ const d=day(),p=S.t%100/60,a=Math.PI*(.1+.8*Math.min(p,1));
+ sun.position.set(TX+Math.cos(a)*25,Math.max(4,Math.sin(a)*22),TZ+8);
+ sun.intensity=d?1.7:.05;amb.intensity=d?.5:.2;amb.color.setHex(d?0x8890c0:0x3a4a90);
+}
+function act(c,r){
+ const t=S.g[r][c];if(!sel||t.b||S.over)return;
+ const w=why(sel,c,r);if(w&&w.indexOf('Next')!==0){msg(w);return}
+ S.reg-=B[sel].c;t.b=sel;S.st=stew();hud();draw();
+}
+function size(){const w=cv.clientWidth,h=cv.clientHeight;if(!w||!h)return;R3.setPixelRatio(Math.min(devicePixelRatio||1,2));R3.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()}
+function hv(e){
+ const b=cv.getBoundingClientRect();mv.set((e.clientX-b.left)/b.width*2-1,-((e.clientY-b.top)/b.height)*2+1);ray.setFromCamera(mv,cam);
+ const h=ray.intersectObjects(tm,false)[0],n=h?[h.object.userData.c,h.object.userData.r]:null;
+ const same=n&&hov&&n[0]===hov[0]&&n[1]===hov[1];hov=n;draw();card();return same}
+let dn=null;
+cv.addEventListener('pointermove',e=>{if(drag){moveDrag(e);return}if(e.pointerType==='mouse'&&!e.buttons)hv(e)});
+cv.addEventListener('pointerdown',e=>{dn=[e.clientX,e.clientY];if(cut||S.over)return;tryPick(e)});
+cv.addEventListener('pointerup',e=>{if(drag){drop(e);return}if(!dn||cut)return;const far=Math.hypot(e.clientX-dn[0],e.clientY-dn[1])>8;dn=null;if(far)return;
+ const same=hv(e);if(hov&&(e.pointerType==='mouse'||same))act(hov[0],hov[1])});
+let ppl=[],drag=null,cut=null,launch=null,lt=0,last=performance.now();
+const WK={ice:1,dig:1,elec:1,green:1,rec:1,shield:1,laser:1};
+function mkP(i){const g=new THREE.Group(),c=[0xffffff,0xffd9b5,0xbfe3ff,0xd8ffd8][i%4];g.add(P(cy(.09,.3,8),c,0,.2,0),P(new THREE.SphereGeometry(.09,10,8),0xf4f4f8,0,.43,0),P(bx(.12,.05,.05),0xd4af37,0,.43,.07,{metalness:.8}),P(bx(.1,.16,.05),0xff8a3d,0,.22,-.08));const h=new THREE.Mesh(new THREE.SphereGeometry(.3,6,6),new THREE.MeshBasicMaterial({visible:false}));h.position.y=.3;g.add(h);g.userData={tx:0,tz:0,w:0,ph:Math.random()*6,job:null};return g}
+function ground(x,z){let b=1e9,h=.3;tm.forEach(m=>{const d=(m.position.x-x)**2+(m.position.z-z)**2;if(d<b){b=d;h=HT[S.g[m.userData.r][m.userData.c].t]}});return h}
+function ppU(dt){
+ const hs=[],ws=[];all((t,c,r)=>{if(t.b==='hab'||t.b==='home')hs.push([c,r]);else if(WK[t.b])ws.push([c,r])});
+ const n=Math.min(S.crew,24);
+ while(ppl.length<n){const p=mkP(ppl.length),h=hs[ppl.length%(hs.length||1)]||[6,4],[x,z]=pos(h[0],h[1]);p.position.set(x,.3,z+.8);p.userData.tx=x;p.userData.tz=z+.8;grp.add(p);ppl.push(p)}
+ while(ppl.length>n)grp.remove(ppl.pop());
+ ppl.forEach((p,i)=>{if(p===drag)return;const u=p.userData,dx=u.tx-p.position.x,dz=u.tz-p.position.z,d=Math.hypot(dx,dz);
+  if(d>.06){const v=Math.min(d,dt*1.1);p.position.x+=dx/d*v;p.position.z+=dz/d*v;p.rotation.y=Math.atan2(dx,dz);u.ph+=dt*9;p.position.y=ground(p.position.x,p.position.z)+Math.abs(Math.sin(u.ph))*.03}
+  else{if(u.job&&day())p.position.y=ground(p.position.x,p.position.z)+Math.abs(Math.sin(performance.now()/160+i))*.04;u.w-=dt;if(u.w<=0){u.w=2+Math.random()*4;const tg=u.job&&day()&&S.g[u.job[1]][u.job[0]].b?u.job:hs.length?hs[i%hs.length]:[6,4],[x,z]=pos(tg[0],tg[1]),a=Math.random()*6.283;u.tx=x+Math.cos(a)*.85;u.tz=z+Math.sin(a)*.85}}})
+}
+function cutscene(st,restore,done,intro){
+ cut={st,i:0,t0:performance.now(),a:cam.position.clone(),la:ctl.target.clone(),sv:restore?[cam.position.clone(),ctl.target.clone()]:null,done,intro,t00:performance.now()};
+ st.forEach(s=>{if(!s.k){s.dur*=1.5;s.k=1}});cut.cs=[];let q=0;st.forEach(s=>{cut.cs.push(q);q+=s.dur});$('skip').style.display=intro?'none':'block';$('app').classList.add('cin');drag=null;ctl.enabled=false;cam.fov=32;cam.updateProjectionMatrix();$('cb').style.display='block';$('cap').textContent='';
+ const fd=$('fd');fd.style.transition='none';fd.style.opacity=1;
+ requestAnimationFrame(()=>requestAnimationFrame(()=>{fd.style.transition='opacity 1.5s';fd.style.opacity=0;$('app').classList.add('bars')}))}
+function cutEnd(){if(!cut)return;const c=cut;cut=null;ctl.enabled=true;cam.fov=45;cam.updateProjectionMatrix();$('app').classList.remove('cin','bars');if(c.intro)ig.visible=false;$('cb').style.display='none';
+ if(c.sv){cam.position.copy(c.sv[0]);ctl.target.copy(c.sv[1])}else{const s=c.st[c.st.length-1];cam.position.set(...s.pos);ctl.target.set(...s.look)}
+ ctl.update();if(c.done)c.done()}
+$('skip').onclick=cutEnd;
+function cutU(n){const s=cut.st[cut.i],p=Math.min(1,(n-cut.t0)/s.dur),e=p*p*(3-2*p);cut.pp=p;
+ cam.position.lerpVectors(cut.a,new THREE.Vector3(...s.pos),e);ctl.target.lerpVectors(cut.la,new THREE.Vector3(...s.look),e);cam.position.x+=Math.sin(n/700)*.07;cam.position.y+=Math.cos(n/900)*.04;cam.lookAt(ctl.target);
+ $('cap').textContent=s.text.slice(0,Math.floor((n-cut.t0)/32));
+ if(p>=1){cut.a=new THREE.Vector3(...s.pos);cut.la=new THREE.Vector3(...s.look);cut.i++;cut.t0=n;if(cut.i>=cut.st.length)cutEnd();}}
+function intro(){cam.position.set(TX-30,55,TZ+65);ctl.target.set(TX,0,TZ);
+ cutscene([{pos:[TX+8,30,TZ+34],look:[TX,0,TZ],dur:2600,text:'Director Ama: Lander is down. Welcome to the Moon, crew.'},{pos:[TX,13,TZ+12],look:[TX,0,TZ],dur:2600,text:'Four of you, one habitat, one home. Keep the lights on.'}],false)}
+function launchScene(show,d){
+ let bm=null,pt=null;all((t,c,r)=>{if(t.b==='rock'){bm=t.bm;pt=pos(c,r)}});
+ if(!bm){show();return}
+ const[x,z]=pt;launch=bm.children.slice(0);lt=0;
+ cutscene([{pos:[x+3,1.6,z+4],look:[x,1,z],dur:1800,text:'T minus ten... all stations green.'},{pos:[x+4,8,z+6],look:[x,7,z],dur:3600,text:'Liftoff! Next stop: '+d+'.'}],false,()=>{launch=null;bm.visible=false;show()})}
+const L=(x,y,z)=>[x,y+300,z];let introSeen=0;
+const ig=new THREE.Group(),IN={},C0=new THREE.Color(0x2f6fe0),C1=new THREE.Color(0x3a1f18),G0=new THREE.Color(0x3fbf6a),G1=new THREE.Color(0x1a1008);
+ig.position.y=300;sc.add(ig);
+function part(g,geo,c0,c1,x,y,z,o){o=o||{};const m=P(geo,c0,x,y,z,o.m);g.add(m);g.userData.p.push({m,c0:new THREE.Color(c0),c1:new THREE.Color(c1),k:o.k||0,t:o.t||0,e:o.e||0,g:o.g||0,y0:y});return m}
+function updDio(g,d){const n=performance.now();g.userData.p.forEach(q=>{q.m.material.color.copy(q.c0).lerp(q.c1,d);
+ if(q.g){const s=.4+q.g*d;q.m.scale.set(s,s,s);q.m.position.y=q.y0+d*q.g*1.4}else{q.m.scale.y=1-q.k*d;q.m.rotation.z=q.t*d}
+ if(q.e)q.m.material.emissiveIntensity=q.e*(1-d)*(.8+.2*Math.sin(n/90))})}
+function dio(k){const g=new THREE.Group();g.userData.p=[];
+ part(g,cy(5,.5,28),[0x3f8f4a,0x6a8a4a,0x4a5a3a,0x3a8a5a][k],0x2a2420,0,.25,0);
+ if(k===0){[[-2,0],[1.5,-1.5],[2,1.8]].forEach(([x,z])=>part(g,new THREE.ConeGeometry(.9,1.3,6),0x8a5a2a,0x1a1210,x,1.1,z,{k:.5}));
+  part(g,new THREE.ConeGeometry(.35,.8,6),0xff8a3d,0x222222,0,.8,0,{k:.9,e:1.2,m:{emissive:0xff6a00}});
+  [[-3,2],[3,-2],[-1,3.4],[0,-3.4],[3.4,2.6]].forEach(([x,z])=>part(g,new THREE.ConeGeometry(.6,1.8,6),0x1f7a3a,0x2a1a10,x,1.4,z,{k:.7,t:.3}))}
+ if(k===1){part(g,bx(2.6,1.6,2.6),0x9a9aa8,0x333038,0,1.3,0,{k:.4});
+  [[-1.5,-1.5],[1.5,-1.5],[-1.5,1.5],[1.5,1.5]].forEach(([x,z],j)=>part(g,cy(.4,2.2),0xb0b0c0,0x2a2830,x,1.6,z,{k:.5,t:j%2?.5:-.5}));
+  part(g,bx(.6,.4,.05),0xcc2233,0x222222,0,2.4,0,{k:1})}
+ if(k===2){part(g,bx(3.2,1.4,2.2),0xa05a3a,0x2a1a14,0,1.2,0,{k:.3});
+  [-1.2,0,1.2].forEach((x,j)=>{part(g,cy(.28,2.6),0x777777,0x2a1a14,x,2.4,0,{k:.4,t:.15*(j-1)});part(g,new THREE.SphereGeometry(.5,8,6),0xdddddd,0x111111,x,3.9,0,{g:1.3+j*.3})})}
+ if(k===3){[[-2.5,-1,3],[-1,1.5,4.5],[1,-1.5,3.8],[2.5,1,5],[0,-2.8,3.4]].forEach(([x,z,h],j)=>part(g,bx(.8,h,.8),0x67e8f9,0x1a1a22,x,h/2+.5,z,{k:.55,t:j%2?.35:-.3,e:1,m:{emissive:0x2299cc,transparent:true,opacity:.9}}))}
+ return g}
+(function(){
+ const st=new Float32Array(900);for(let i=0;i<300;i++){const a=Math.random()*6.283,b=Math.acos(2*Math.random()-1);st.set([170*Math.sin(b)*Math.cos(a),170*Math.cos(b),170*Math.sin(b)*Math.sin(a)],i*3)}
+ const sg=new THREE.BufferGeometry();sg.setAttribute('position',new THREE.BufferAttribute(st,3));ig.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xffffff,size:1.4,sizeAttenuation:false})));
+ IN.earth=new THREE.Mesh(new THREE.SphereGeometry(10,32,20),new THREE.MeshStandardMaterial({color:0x2f6fe0,roughness:.8}));
+ IN.land=new THREE.Mesh(new THREE.IcosahedronGeometry(10.15,2),new THREE.MeshStandardMaterial({color:0x3fbf6a,flatShading:true,transparent:true,opacity:.55}));
+ IN.lava=new THREE.Mesh(new THREE.IcosahedronGeometry(10.3,2),new THREE.MeshBasicMaterial({color:0xff5a1a,wireframe:true,transparent:true,opacity:0}));
+ IN.cloud=new THREE.Mesh(new THREE.SphereGeometry(10.7,20,14),new THREE.MeshStandardMaterial({color:0xffffff,transparent:true,opacity:.35}));
+ IN.moon=new THREE.Mesh(new THREE.SphereGeometry(3,20,14),new THREE.MeshStandardMaterial({color:0x9a9aa8}));IN.moon.position.set(60,6,-10);
+ ig.add(IN.earth,IN.land,IN.lava,IN.cloud,IN.moon);
+ IN.ships=[];for(let k=0;k<16;k++){const s=mk('rock');s.scale.setScalar(.9);s.add(P(new THREE.SphereGeometry(.3,8,6),0xffa040,0,-.1,0,{emissive:0xff6a00}));s.rotation.z=-1.5708;s.visible=false;ig.add(s);IN.ships.push(s)}
+ IN.site=new THREE.Group();IN.site.position.set(0,0,-50);IN.site.add(P(cy(11,.4,32),0x3a2a22,0,0,0));
+ IN.rk=[];for(let j=0;j<6;j++){const r=mk('rock');r.scale.setScalar(1.7);r.position.set(3,.2,(j-2.5)*2);IN.site.add(r);IN.rk.push(r)}
+ IN.as=[];for(let k=0;k<14;k++){const a=mkP(k);a.scale.setScalar(2.2);a.rotation.y=1.5708;IN.site.add(a);IN.as.push(a)}
+ ig.add(IN.site);
+ IN.dio=[0,1,2,3].map(k=>{const g=dio(k);g.position.set(-21+14*k,0,-90);ig.add(g);return g});
+ ig.visible=false})();
+function introU(n){
+ const i=cut.i,ms=n-cut.t00,p=cut.pp||0,cs=cut.cs,d=Math.min(1,ms/cs[4]);
+ IN.earth.visible=IN.land.visible=IN.lava.visible=IN.cloud.visible=i<=1||i===3;IN.moon.visible=i===3||i===8;IN.site.visible=i===2;
+ IN.earth.material.color.copy(C0).lerp(C1,d);IN.land.material.color.copy(G0).lerp(G1,d);IN.land.material.opacity=.55+.3*d;IN.lava.material.opacity=d;IN.cloud.material.color.setHex(0xffffff).lerp(C1,d);
+ IN.earth.rotation.y+=.003;IN.land.rotation.y+=.003;IN.lava.rotation.y+=.002;
+ IN.ships.forEach((s,k)=>{const u=Math.min(1,Math.max(0,(ms-cs[3]-k*350)/9000)),e=u*u*(3-2*u),y0=(k%4-1.5)*2,z0=((k>>2)-1.5)*2;s.visible=u>0&&(i===3||i===8);
+  s.position.set(9.5+(60+Math.cos(k*2.4)*5-9.5)*e,y0+(6+Math.sin(k*1.7)*2-y0)*e+Math.sin(u*3.14)*6,z0+(-10+Math.sin(k*2.4)*5-z0)*e)});
+ IN.as.forEach((a,k)=>{const u=(ms*.0007+k*.31)%1;a.position.set(-9+u*8,.5+Math.abs(Math.sin(ms/110+k))*.15,((k%7)-3)*1.45)});
+ IN.rk.forEach((r,j)=>{const t=Math.max(0,(ms-cs[2]-1500-j*500)/1000);r.position.y=.2+t*t*2.2});
+ IN.dio.forEach((g,k)=>{g.visible=i===4+k;if(g.visible)updDio(g,Math.min(1,p*1.3))})}
+function introFull(){
+ const st=[
+ {pos:L(0,2,40),look:L(0,0,0),dur:3000,text:'Year 2412. Earth is dying.'},
+ {pos:L(-16,6,22),look:L(0,0,0),dur:3500,text:'The oceans boil. The forests are ash. The air can no longer be breathed.'},
+ {pos:L(-8,3,-40),look:L(1,2.5,-50),dur:4500,text:'Astronauts race for the last ships. There is no time left.'},
+ {pos:L(30,10,28),look:L(30,2,-6),dur:4000,text:'The last ships climb through burning skies, carrying seeds, water and us.'},
+ {pos:L(-21,3.2,-80),look:L(-21,1.3,-90),dur:3500,text:'The Stone Age forests we swore to protect... ash.'},
+ {pos:L(-7,3.2,-80),look:L(-7,1.3,-90),dur:3200,text:'The kingdoms of the Middle Ages fell silent.'},
+ {pos:L(7,3.2,-80),look:L(7,2,-90),dur:3200,text:'The chimneys never stopped. The sky never cleared.'},
+ {pos:L(21,3.8,-80),look:L(21,2.4,-90),dur:3500,text:'Even our clean cities of glass could not outrun what we burned.'},
+ {pos:L(52,2,14),look:L(60,6,-10),dur:4000,text:'Director Ama: We do not run to survive. We go to START LIFE in space.'},
+ {pos:[TX-40,90,TZ+110],look:[TX,0,TZ],dur:3200,text:'The Moon will be our first home.'},
+ {pos:[TX+8,30,TZ+34],look:[TX,0,TZ],dur:2400,text:'Seeds. Water. Four crew. One habitat.'},
+ {pos:[TX,13,TZ+12],look:[TX,0,TZ],dur:2400,text:'Build slowly. Build kindly. Begin.'}];
+ cam.position.set(...st[0].pos);ctl.target.set(...st[0].look);cam.lookAt(ctl.target);ig.visible=true;cutscene(st,false,null,true)}
+(function loop(){requestAnimationFrame(loop);const n=performance.now(),dt=Math.min(.1,(n-last)/1000);last=n;
+ if(cut){cutU(n);if(cut&&cut.intro)introU(n)}else ctl.update();
+ if(S){all(t=>{const s=t.bm&&t.bm.userData.sp;if(s)s.rotation[s.userData.ax]+=.03});ppU(dt*spd);S.al.forEach(a=>{const m=a.m.position,k=Math.min(1,dt*2);m.x+=(a.x-m.x)*k;m.z+=(a.z-m.z)*k;m.y+=(1.6-m.y)*Math.min(1,dt);a.m.rotation.y+=dt*3})}
+ if(launch){lt+=dt;launch.forEach(m=>m.position.y+=Math.max(0,lt-1.8)*2.2*dt)}
+ R3.render(sc,cam)})();
+
+addEventListener('keydown',e=>{if(e.key==='Escape'){sel=null;hud();draw()}});
+addEventListener('resize',()=>{size();draw()});
+function start(){newGame();spd=1;sel=null;hov=null;$('ov').style.display='none';size();hud();draw();(introSeen?intro():introFull());introSeen=1;clearInterval(timer);timer=setInterval(tick,1000)}
+$('go').onclick=start;
+start();
+new ResizeObserver(()=>{size();if(S)draw()}).observe($('wrap'));
+</script></body></html>
